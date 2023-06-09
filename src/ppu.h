@@ -66,3 +66,5 @@ typedef struct Ppu {
 } Ppu;
 
 void ppu_clock(Ppu* self);
+void ppu_generate_tile_map(Ppu* self, u32 width, u32 height, u32* data);
+void ppu_generate_sprite_map(Ppu* self, u32 width, u32 height, u32* data);

@@ -16,7 +16,7 @@ static u8 inst_ld(Cpu* self) {
 static u8 inst_ld16(Cpu* self) {
 	bus_write(self->bus, self->dest_addr, self->fetched_data);
 	bus_write(self->bus, self->dest_addr + 1, self->fetched_data >> 8);
-	return 3;
+	return 1;
 }
 
 static u8 inst_xor(Cpu* self) {
@@ -166,7 +166,7 @@ static u8 inst_cb(Cpu* self) {
 	else if (op <= 0x7F) {
 		u8 bit = (op - 0x40) >> 3;
 		self->regs[REG_F] = (self->regs[REG_F] & F_C) | F_H | (!(value & 1 << bit) ? F_Z : 0);
-		return 1;
+		return 1 + cycles;
 	}
 	// RES
 	else if (op <= 0xBF) {
@@ -201,12 +201,12 @@ static bool check_cond(Cpu* self) {
 
 static u8 inst_jr(Cpu* self) {
 	if (!check_cond(self)) {
-		return 2;
+		return 1;
 	}
 
 	self->pc += (i8) self->fetched_data;
 
-	return 3;
+	return 2;
 }
 
 static u8 inst_inc(Cpu* self) {
@@ -232,14 +232,14 @@ static u8 inst_inc(Cpu* self) {
 
 static u8 inst_call(Cpu* self) {
 	if (!check_cond(self)) {
-		return 3;
+		return 1;
 	}
 
 	bus_write(self->bus, --self->sp, self->pc >> 8);
 	bus_write(self->bus, --self->sp, self->pc);
 	self->pc = self->fetched_data;
 
-	return 6;
+	return 4;
 }
 
 static u8 inst_push(Cpu* self) {
@@ -382,12 +382,12 @@ static u8 inst_nop(Cpu*) {
 
 static u8 inst_jp(Cpu* self) {
 	if (!check_cond(self)) {
-		return 3;
+		return 1;
 	}
 
 	self->pc = self->fetched_data;
 
-	return 4;
+	return self->cur_inst->rs == REG_HL ? 1 : 2;
 }
 
 static u8 inst_di(Cpu* self) {

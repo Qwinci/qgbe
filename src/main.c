@@ -12,9 +12,14 @@ int main() {
 	}*/
 
 	const char* rom = "../roms/tests/dmg-acid2/dmg-acid2.gb";
-	// 0xFD: bits_bank2, bits_mode
-	// failed: ramg, rom_1Mb, rom_2Mb, rom_4Mb, rom_8Mb, rom_16Mb, rom_512kb
-	// stuck: ram_256kb
+	//const char* rom = "../roms/Tetris (World) (Rev A).gb";
+	//const char* rom = "../roms/Legend of Zelda, The - Link's Awakening (G) [!].gb";
+	//const char* rom = "../roms/gb-test-roms/instr_timing/instr_timing.gb";
+	//const char* rom = "../roms/tests/mooneye-test-suite/acceptance/jp_timing.gb";
+	//const char* rom = "../roms/tests/mooneye-test-suite/acceptance/halt_ime1_timing.gb";
+	//const char* rom = "../roms/gb-test-roms/cpu_instrs/individual/02-interrupts.gb";
+	//const char* rom = "../roms/tests/mooneye-test-suite/acceptance/timer/tim10.gb";
+
 	if (emu_load_rom(&emu, rom)) {
 		//puts("rom loaded");
 	}

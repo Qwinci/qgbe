@@ -3,15 +3,14 @@
 #include <string.h>
 
 void bus_cycle(Bus* self) {
-	cpu_cycle(&self->cpu);
 	u8 old_div = self->timer.div >> 8;
-	timer_cycle(&self->timer);
+	cpu_cycle(&self->cpu);
 	// PPU uses T cycles
 	for (u8 i = 0; i < 4; ++i) {
 		ppu_clock(&self->ppu);
 		apu_clock_channels(&self->apu);
 	}
-	if (old_div & 1 << 4 && !((self->timer.div >> 8) & 1 << 4)) {
+	if (old_div & 1 << 5 && !((self->timer.div >> 8) & 1 << 5)) {
 		apu_clock(&self->apu);
 	}
 }

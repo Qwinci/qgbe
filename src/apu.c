@@ -184,7 +184,7 @@ void apu_gen_sample(Apu* self, f32 out[2]) {
 	f32 left = 0;
 	f32 right = 0;
 
-	if (self->nr52 & 1 << 0) {
+	/*if (self->nr52 & 1 << 0) {
 		bool channel1_duty = DUTY_TABLE[self->nr11 >> 6][self->channel1_cur_duty];
 		u8 volume = self->channel1_vol;
 		f32 amp = 1.0f / 8.0f * (f32) volume;
@@ -197,7 +197,7 @@ void apu_gen_sample(Apu* self, f32 out[2]) {
 			}
 		}
 		num_channels += 1;
-	}
+	}*/
 
 	if (self->nr52 & 1 << 1) {
 		bool channel2_duty = DUTY_TABLE[self->nr21 >> 6][self->channel2_cur_duty];

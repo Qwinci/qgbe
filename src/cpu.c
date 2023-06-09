@@ -165,7 +165,7 @@ void cpu_request_irq(Cpu* self, Irq irq) {
 	self->if_flag |= (u8) irq;
 }
 
-static u8 IRQ_LOCATIONS[5] = {
+static u16 IRQ_LOCATIONS[5] = {
 	[0] = 0x40,
 	[1] = 0x48,
 	[2] = 0x50,
@@ -201,15 +201,33 @@ bool cpu_process_irqs(Cpu* self) {
 	return false;
 }
 
+static usize INST_COUNT = 0;
+
 void cpu_cycle(Cpu* self) {
 	if (self->remaining_cycles) {
 		self->remaining_cycles -= 1;
 		return;
 	}
 
-	if (cpu_process_irqs(self) || self->halted) {
+	if (cpu_process_irqs(self)) {
+		timer_cycle(&self->bus->timer);
 		return;
 	}
+	if (self->halted) {
+		timer_cycle(&self->bus->timer);
+		return;
+	}
+
+	/*printf("%zu  TIMA: %02X TMA: %02X DIV: %02X TAC: %02X IME: %02X IE: %02X IF: %02X "
+		   "A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n",
+		   INST_COUNT, self->bus->timer.tima, self->bus->timer.tma, self->bus->timer.div >> 8, self->bus->timer.tac,
+		   self->ime ? 1 : 0, self->ie, self->if_flag,
+		   self->regs[REG_A], self->regs[REG_F], self->regs[REG_B], self->regs[REG_C],
+		   self->regs[REG_D], self->regs[REG_E], self->regs[REG_H], self->regs[REG_L],
+		   self->sp, self->pc, bus_read(self->bus, self->pc), bus_read(self->bus, self->pc + 1),
+		   bus_read(self->bus, self->pc + 2), bus_read(self->bus, self->pc + 3));
+
+	INST_COUNT += 1;*/
 
 	/*if (self->pc >= 0x100) {
 		printf("A: %02X F: %02X B: %02X C: %02X D: %02X E: %02X H: %02X L: %02X SP: %04X PC: 00:%04X (%02X %02X %02X %02X)\n",
@@ -228,9 +246,6 @@ void cpu_cycle(Cpu* self) {
 
 	//print_inst(self, inst, start_pc);
 
-	// [016B]: LD (4000), A
-
-
 	// A: 01 F: B0 B: 00 C: 13 D: 00 E: D8 H: 01 L: 4D SP: FFFE PC: 00:0100 (00 C3 13 02)
 
 	if (!INST_FNS[inst->type]) {
@@ -238,4 +253,59 @@ void cpu_cycle(Cpu* self) {
 		exit(1);
 	}
 	self->remaining_cycles += INST_FNS[inst->type](self);
+
+	/*const u8 TIMINGS[] = {
+		1,3,2,2,1,1,2,1,5,2,2,2,1,1,2,1,
+		0,3,2,2,1,1,2,1,3,2,2,2,1,1,2,1,
+		2,3,2,2,1,1,2,1,2,2,2,2,1,1,2,1,
+		2,3,2,2,3,3,3,1,2,2,2,2,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		2,2,2,2,2,2,0,2,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		1,1,1,1,1,1,2,1,1,1,1,1,1,1,2,1,
+		2,3,3,4,3,4,2,4,2,4,3,0,3,6,2,4,
+		2,3,3,0,3,4,2,4,2,4,3,0,3,0,2,4,
+		3,3,2,0,0,4,2,4,4,1,4,0,0,0,2,4,
+		3,3,2,1,0,4,2,4,3,2,4,1,0,0,2,4
+	};
+
+	const u8 CB_TIMINGS[] = {
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,
+		2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,
+		2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,
+		2,2,2,2,2,2,3,2,2,2,2,2,2,2,3,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2,
+		2,2,2,2,2,2,4,2,2,2,2,2,2,2,4,2
+	};
+
+	if (inst->type == T_CB) {
+		if (self->remaining_cycles != CB_TIMINGS[self->fetched_data]) {
+			fprintf(stderr, "invalid timing for:\n");
+			print_inst(self, inst, start_pc);
+			fprintf(stderr, "expected: %u got: %u\n", CB_TIMINGS[self->fetched_data], self->remaining_cycles);
+		}
+	}
+	else if (self->remaining_cycles != TIMINGS[op] && inst->type != T_JR && inst->type != T_RET) {
+		fprintf(stderr, "invalid timing for:\n");
+		print_inst(self, inst, start_pc);
+		fprintf(stderr, "expected: %u got: %u\n", TIMINGS[op], self->remaining_cycles);
+	}*/
+
+	for (u8 i = 0; i < self->remaining_cycles; ++i) {
+		timer_cycle(&self->bus->timer);
+	}
 }

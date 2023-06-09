@@ -3,13 +3,12 @@
 
 typedef struct {
 	struct Bus* bus;
-	u16 divider;
-	u16 cycles;
-
 	u16 div;
 	u8 tima;
 	u8 tma;
 	u8 tac;
+	u8 last_res;
+	bool overflowed;
 } Timer;
 
 void timer_write(Timer* self, u16 addr, u8 value);

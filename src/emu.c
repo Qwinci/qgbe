@@ -107,6 +107,12 @@ bool emu_load_rom(Emulator* self, const char* path) {
 #define REAL_WIDTH 160
 #define REAL_HEIGHT 144
 
+#define TILE_VIEWER_WIDTH (128 * 4)
+#define TILE_VIEWER_HEIGHT (128 * 4)
+
+#define SPRITE_VIEWER_WIDTH (128 * 4)
+#define SPRITE_VIEWER_HEIGHT (128 * 4)
+
 void emu_run(Emulator* self) {
 	// A: 01 F: B0 B: 00 C: 13 D: 00 E: D8 H: 01 L: 4D SP: FFFE PC: 00:0100 (00 C3 13 02)
 	if (!self->bus.bootrom_mapped) {
@@ -143,6 +149,9 @@ void emu_run(Emulator* self) {
 		backing[i * REAL_WIDTH + REAL_WIDTH - 1] = 0x00FF00FF;
 	}
 
+	u32* tile_data_backing = (u32*) calloc(1, TILE_VIEWER_WIDTH * TILE_VIEWER_HEIGHT * 4);
+	u32* sprite_data_backing = (u32*) calloc(1, SPRITE_VIEWER_WIDTH * SPRITE_VIEWER_HEIGHT * 4);
+
 	self->bus.ppu.texture = backing;
 
 	SDL_UpdateTexture(tex, NULL, backing, REAL_WIDTH * 4);
@@ -177,12 +186,78 @@ void emu_run(Emulator* self) {
 	}
 	SDL_PauseAudioDevice(audio_dev, false);
 
+	SDL_Window* tile_viewer_window = NULL;
+	SDL_Renderer* tile_renderer = NULL;
+	SDL_Texture* tile_view_tex = NULL;
+
+	SDL_Window* sprite_viewer_window = NULL;
+	SDL_Renderer* sprite_renderer = NULL;
+	SDL_Texture* sprite_view_tex = NULL;
+
+	Uint32 main_window_id = SDL_GetWindowID(window);
+	Uint32 tile_window_id = 0;
+	Uint32 sprite_window_id = 0;
+
 	bool running = true;
 	while (running) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT) {
-				running = false;
+			if (event.type == SDL_WINDOWEVENT) {
+				if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+					if (event.window.windowID == main_window_id) {
+						running = false;
+					}
+					else if (event.window.windowID == tile_window_id) {
+						SDL_DestroyTexture(tile_view_tex);
+						SDL_DestroyRenderer(tile_renderer);
+						SDL_DestroyWindow(tile_viewer_window);
+						tile_window_id = 0;
+					}
+					else if (event.window.windowID == sprite_window_id) {
+						SDL_DestroyTexture(sprite_view_tex);
+						SDL_DestroyRenderer(sprite_renderer);
+						SDL_DestroyWindow(sprite_viewer_window);
+						sprite_window_id = 0;
+					}
+				}
+			}
+			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_t && event.key.keysym.mod & KMOD_CTRL) {
+				if (!tile_window_id) {
+					tile_viewer_window = SDL_CreateWindow(
+						"qgbe tile viewer",
+						SDL_WINDOWPOS_UNDEFINED,
+						SDL_WINDOWPOS_UNDEFINED,
+						TILE_VIEWER_WIDTH,
+						TILE_VIEWER_HEIGHT,
+						0);
+					tile_window_id = SDL_GetWindowID(tile_viewer_window);
+					tile_renderer = SDL_CreateRenderer(tile_viewer_window, 0, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+					tile_view_tex = SDL_CreateTexture(
+						tile_renderer,
+						SDL_PIXELFORMAT_BGRA8888,
+						SDL_TEXTUREACCESS_STREAMING,
+						TILE_VIEWER_WIDTH,
+						TILE_VIEWER_HEIGHT);
+				}
+			}
+			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s && event.key.keysym.mod & KMOD_CTRL) {
+				if (!sprite_window_id) {
+					sprite_viewer_window = SDL_CreateWindow(
+						"qgbe sprite viewer",
+						SDL_WINDOWPOS_UNDEFINED,
+						SDL_WINDOWPOS_UNDEFINED,
+						SPRITE_VIEWER_WIDTH,
+						SPRITE_VIEWER_HEIGHT,
+						0);
+					sprite_window_id = SDL_GetWindowID(sprite_viewer_window);
+					sprite_renderer = SDL_CreateRenderer(sprite_viewer_window, 0, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+					sprite_view_tex = SDL_CreateTexture(
+						sprite_renderer,
+						SDL_PIXELFORMAT_BGRA8888,
+						SDL_TEXTUREACCESS_STREAMING,
+						SPRITE_VIEWER_WIDTH,
+						SPRITE_VIEWER_HEIGHT);
+				}
 			}
 		}
 
@@ -248,17 +323,18 @@ void emu_run(Emulator* self) {
 			}
 		}
 
+		usize cycles = 0;
 		while (!self->bus.ppu.frame_ready) {
 			bus_cycle(&self->bus);
-			if (self->bus.timer.div % 22 == 0) {
+			if (cycles % 22 == 0) {
 				apu_gen_sample(&self->bus.apu, audio_buffer + audio_size);
 				audio_size += 2;
 				if (audio_size == sizeof(audio_buffer) / sizeof(*audio_buffer)) {
-					// todo
-					//SDL_QueueAudio(audio_dev, audio_buffer, audio_size * sizeof(f32));
+					SDL_QueueAudio(audio_dev, audio_buffer, audio_size * sizeof(f32));
 					audio_size = 0;
 				}
 			}
+			cycles += 1;
 		}
 
 		SDL_UpdateTexture(tex, NULL, backing, REAL_WIDTH * 4);
@@ -266,8 +342,38 @@ void emu_run(Emulator* self) {
 		SDL_RenderClear(renderer);
 		SDL_RenderCopy(renderer, tex, NULL, &render_rect);
 		SDL_RenderPresent(renderer);
+
+		if (tile_window_id) {
+			ppu_generate_tile_map(&self->bus.ppu, TILE_VIEWER_WIDTH, TILE_VIEWER_HEIGHT, tile_data_backing);
+			SDL_UpdateTexture(tile_view_tex, NULL, tile_data_backing, TILE_VIEWER_WIDTH * 4);
+			SDL_RenderClear(tile_renderer);
+			SDL_RenderCopy(tile_renderer, tile_view_tex, NULL, NULL);
+			SDL_RenderPresent(tile_renderer);
+		}
+
+		if (sprite_window_id) {
+			ppu_generate_sprite_map(&self->bus.ppu, SPRITE_VIEWER_WIDTH, SPRITE_VIEWER_HEIGHT, sprite_data_backing);
+			SDL_UpdateTexture(sprite_view_tex, NULL, sprite_data_backing, SPRITE_VIEWER_WIDTH * 4);
+			SDL_RenderClear(sprite_renderer);
+			SDL_RenderCopy(sprite_renderer, sprite_view_tex, NULL, NULL);
+			SDL_RenderPresent(sprite_renderer);
+		}
 	}
 
+	if (tile_window_id) {
+		SDL_DestroyTexture(tile_view_tex);
+		SDL_DestroyRenderer(tile_renderer);
+		SDL_DestroyWindow(tile_viewer_window);
+	}
+	if (sprite_window_id) {
+		SDL_DestroyTexture(sprite_view_tex);
+		SDL_DestroyRenderer(sprite_renderer);
+		SDL_DestroyWindow(sprite_viewer_window);
+	}
+	SDL_DestroyTexture(tex);
+	free(backing);
+	free(tile_data_backing);
+	free(sprite_data_backing);
 	SDL_CloseAudioDevice(audio_dev);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);

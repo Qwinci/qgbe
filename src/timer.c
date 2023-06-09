@@ -16,24 +16,37 @@ u8 timer_read(Timer* self, u16 addr) {
 	}
 }
 
-void timer_cycle(Timer* self) {
-	self->div += 1;
+static u8 DIV_BIT_POS[] = {
+	[0b00] = 9,
+	[0b01] = 3,
+	[0b10] = 5,
+	[0b11] = 7
+};
 
-	if (self->tac & 1 << 2) {
-		if (self->cycles + 1 == self->divider) {
-			if (self->tima == 0xFF) {
-				self->tima = self->tma;
-				cpu_request_irq(&self->bus->cpu, IRQ_TIMER);
-			}
-			else {
-				self->tima += 1;
-			}
-			self->cycles = 0;
+void timer_cycle(Timer* self) {
+	self->div += 4;
+
+	if (self->overflowed) {
+		self->tima = self->tma;
+		cpu_request_irq(&self->bus->cpu, IRQ_TIMER);
+		self->overflowed = false;
+	}
+
+	u8 bit = self->div >> DIV_BIT_POS[self->tac & 0b11] & 0b1;
+	u8 timer_enable = self->tac >> 2 & 1;
+	u8 res = bit & timer_enable;
+
+	if (self->last_res && !res) {
+		if (self->tima == 0xFF) {
+			self->tima = 0;
+			self->overflowed = true;
 		}
 		else {
-			self->cycles += 1;
+			self->tima += 1;
 		}
 	}
+
+	self->last_res = res;
 }
 
 void timer_write(Timer* self, u16 addr, u8 value) {
@@ -47,19 +60,28 @@ void timer_write(Timer* self, u16 addr, u8 value) {
 		self->tma = value;
 	}
 	else {
+		//u8 old_tac = self->tac;
 		self->tac = value;
-		u8 divider = value & 0b11;
-		if (divider == 0b00) {
-			self->divider = 1024 / 4;
-		}
-		else if (divider == 0b01) {
-			self->divider = 16 / 4;
-		}
-		else if (divider == 0b10) {
-			self->divider = 64 / 4;
-		}
-		else {
-			self->divider = 256 / 4;
-		}
+
+		/*if (old_tac & 1 << 2) {
+			bool increase;
+			if (!(value & 1 << 2)) {
+				increase = self->div >> DIV_BIT_POS[old_tac & 0b11] & 0b1;
+			}
+			else {
+				increase = (self->div >> DIV_BIT_POS[old_tac & 0b11] & 0b1) && (self->div >> DIV_BIT_POS[value & 0b11] & 0b1) == 0;
+			}
+
+			if (increase) {
+				if (self->tima == 0xFF) {
+					self->tima = self->tma;
+					cpu_request_irq(&self->bus->cpu, IRQ_TIMER);
+				}
+				else {
+					self->tima += 1;
+				}
+				self->last_res = 0;
+			}
+		}*/
 	}
 }
