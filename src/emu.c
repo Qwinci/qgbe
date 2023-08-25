@@ -11,8 +11,7 @@ Emulator emu_new() {
 	emu.bus.ppu.bus = &emu.bus;
 	emu.bus.timer.bus = &emu.bus;
 	emu.bus.joyp = 0xFF;
-	emu.bus.ppu.bg_fetcher.ppu = &emu.bus.ppu;
-	emu.bus.ppu.sp_fetcher.ppu = &emu.bus.ppu;
+	ppu_reset(&emu.bus.ppu);
 	return emu;
 }
 
@@ -88,6 +87,10 @@ bool emu_load_rom(Emulator* self, const char* path) {
 	else if (hdr->type == 1 || hdr->type == 2 || hdr->type == 3) {
 		mapper = mbc1_new(&self->bus.cart);
 	}
+	else if (hdr->type == 0x13) {
+		fprintf(stderr, "warning: using mbc1 for mbc3 rom\n");
+		mapper = mbc1_new(&self->bus.cart);
+	}
 	// MBC3+TIMER+BATTERY/MBC3+TIMER+RAM+BATTERY/MBC3/MBC3+RAM/MBC3+RAM+BATTERY
 	else {
 		fprintf(stderr, "error: unsupported cartridge type %X\n", hdr->type);
@@ -131,8 +134,18 @@ void emu_run(Emulator* self) {
 	}
 
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-	SDL_Window* window = SDL_CreateWindow("qgbe", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_ALLOW_HIGHDPI);
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, 0, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_Window* window = SDL_CreateWindow(
+		"qgbe",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		800,
+		600,
+		SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, 0,  SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
 	float aspect = (float) REAL_HEIGHT / (float) REAL_WIDTH;
 
@@ -219,6 +232,11 @@ void emu_run(Emulator* self) {
 						SDL_DestroyWindow(sprite_viewer_window);
 						sprite_window_id = 0;
 					}
+				}
+				else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+					//SDL_Rect rect = {.w = event.window.data1, .h = event.window.data2};
+					//SDL_RenderSetScale(renderer, (f32) event.window.data1 / 800.0f, (f32) event.window.data2 / 800.0f);
+					SDL_RenderSetLogicalSize(renderer, 800, 600);
 				}
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_t && event.key.keysym.mod & KMOD_CTRL) {

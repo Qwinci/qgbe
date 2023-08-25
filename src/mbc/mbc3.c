@@ -20,7 +20,7 @@ Mapper* mbc3_new(Cart* self) {
 }
 
 u8 mbc3_read(Mapper* mapper_self, u16 addr) {
-
+	return 0;
 }
 
 void mbc3_write(Mapper* mapper_self, u16 addr, u8 value) {

@@ -174,7 +174,7 @@ static u16 IRQ_LOCATIONS[5] = {
 };
 
 bool cpu_process_irqs(Cpu* self) {
-	if (self->ime && self->if_flag) {
+	if (self->ime && self->if_flag & self->ie) {
 		for (u8 i = 0; i < 5; ++i) {
 			if ((self->ie & 1 << i) && (self->if_flag & 1 << i)) {
 				self->if_flag &= ~(1 << i);
@@ -183,6 +183,7 @@ bool cpu_process_irqs(Cpu* self) {
 				bus_write(self->bus, --self->sp, self->pc >> 8);
 				bus_write(self->bus, --self->sp, self->pc);
 
+				self->halted = false;
 				self->pc = IRQ_LOCATIONS[i];
 				self->remaining_cycles = 5;
 				return true;
@@ -190,12 +191,8 @@ bool cpu_process_irqs(Cpu* self) {
 		}
 	}
 	else if (self->if_flag && self->halted) {
-		for (u8 i = 0; i < 5; ++i) {
-			if ((self->ie & 1 << i) && (self->if_flag & 1 << i)) {
-				self->halted = false;
-				return true;
-			}
-		}
+		self->halted = false;
+		return true;
 	}
 
 	return false;
