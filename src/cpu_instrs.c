@@ -258,7 +258,8 @@ static u8 inst_rla(Cpu* self) {
 }
 
 static u8 inst_pop(Cpu* self) {
-	u16 value = bus_read(self->bus, self->sp++) | bus_read(self->bus, self->sp++) << 8;
+	u16 value = bus_read(self->bus, self->sp++);
+	value |= bus_read(self->bus, self->sp++) << 8;
 
 	reg_write(self, self->cur_inst->rd, value);
 
@@ -288,14 +289,16 @@ static u8 inst_dec(Cpu* self) {
 
 static u8 inst_ret(Cpu* self) {
 	if (self->cur_inst->cond == C_NONE) {
-		self->pc = bus_read(self->bus, self->sp++) | bus_read(self->bus, self->sp++) << 8;
+		self->pc = bus_read(self->bus, self->sp++);
+		self->pc |= bus_read(self->bus, self->sp++) << 8;
 		return 4;
 	}
 	else if (!check_cond(self)) {
 		return 2;
 	}
 
-	self->pc = bus_read(self->bus, self->sp++) | bus_read(self->bus, self->sp++) << 8;
+	self->pc = bus_read(self->bus, self->sp++);
+	self->pc |= bus_read(self->bus, self->sp++) << 8;
 
 	return 5;
 }
@@ -537,7 +540,8 @@ static u8 inst_rst(Cpu* self) {
 }
 
 static u8 inst_reti(Cpu* self) {
-	self->pc = bus_read(self->bus, self->sp++) | bus_read(self->bus, self->sp++) << 8;
+	self->pc = bus_read(self->bus, self->sp++);
+	self->pc |= bus_read(self->bus, self->sp++) << 8;
 	self->ime = true;
 	return 4;
 }
