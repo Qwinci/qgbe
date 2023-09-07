@@ -12,6 +12,7 @@ int main() {
 	}*/
 
 	const char* rom = "../roms/tests/dmg-acid2/dmg-acid2.gb";
+	//const char* rom = "../roms/Tetris (World) (Rev A).gb";
 	//const char* rom = "../roms/gb-test-roms/instr_timing/instr_timing.gb";
 	//const char* rom = "../roms/tests/mooneye-test-suite/acceptance/jp_timing.gb";
 	//const char* rom = "../roms/gb-test-roms/dmg_sound/rom_singles/04-sweep.gb";

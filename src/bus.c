@@ -1,6 +1,5 @@
 #include "bus.h"
 #include <stdio.h>
-#include <string.h>
 
 void bus_cycle(Bus* self) {
 	u8 old_div = self->timer.div >> 8;
@@ -56,7 +55,8 @@ void bus_write(Bus* self, u16 addr, u8 value) {
 			self->ppu.lcdc = value;
 		}
 		else if (addr == 0xFF41) {
-			self->ppu.stat = value;
+			self->ppu.stat &= 0b111;
+			self->ppu.stat |= value & ~0b111;
 		}
 		else if (addr == 0xFF42) {
 			self->ppu.scy = value;

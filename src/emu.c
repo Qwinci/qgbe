@@ -396,4 +396,11 @@ void emu_run(Emulator* self) {
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
+
+	if (self->bus.cart.data) {
+		free(self->bus.cart.data);
+	}
+	if (self->bus.cart.ram) {
+		free(self->bus.cart.ram);
+	}
 }
