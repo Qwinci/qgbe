@@ -24,13 +24,17 @@ static u8 DIV_BIT_POS[] = {
 };
 
 void timer_cycle(Timer* self) {
-	self->div += 4;
-
 	if (self->overflowed) {
+		self->overflowed = false;
 		self->tima = self->tma;
 		cpu_request_irq(&self->bus->cpu, IRQ_TIMER);
-		self->overflowed = false;
+		self->tima_reloaded = true;
 	}
+	else {
+		self->tima_reloaded = false;
+	}
+
+	self->div += 4;
 
 	u8 bit = self->div >> DIV_BIT_POS[self->tac & 0b11] & 0b1;
 	u8 timer_enable = self->tac >> 2 & 1;
@@ -54,9 +58,15 @@ void timer_write(Timer* self, u16 addr, u8 value) {
 		self->div = 0;
 	}
 	else if (addr == 0xFF05) {
-		self->tima = value;
+		if (!self->tima_reloaded) {
+			self->tima = value;
+		}
+		self->overflowed = false;
 	}
 	else if (addr == 0xFF06) {
+		if (self->tima_reloaded) {
+			self->tima = value;
+		}
 		self->tma = value;
 	}
 	else {

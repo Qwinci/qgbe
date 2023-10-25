@@ -9,6 +9,7 @@ typedef struct {
 	u8 tac;
 	u8 last_res;
 	bool overflowed;
+	bool tima_reloaded;
 } Timer;
 
 void timer_write(Timer* self, u16 addr, u8 value);
