@@ -134,22 +134,15 @@ void emu_run(Emulator* self) {
 	}
 
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 6);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_Window* window = SDL_CreateWindow(
 		"qgbe",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		800,
-		600,
-		SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+		REAL_WIDTH * 4,
+		REAL_HEIGHT * 4,
+		SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
 
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, 0,  SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-	float aspect = (float) REAL_HEIGHT / (float) REAL_WIDTH;
-
-	SDL_Rect render_rect = {0, 0, (int) (aspect * 800.0f), (int) (aspect * 600.0f)};
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, 0,  SDL_RENDERER_ACCELERATED);
 
 	SDL_Texture* tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, REAL_WIDTH, REAL_HEIGHT);
 	u32* backing = (u32*) calloc(1, REAL_WIDTH * REAL_HEIGHT * 4);
@@ -184,12 +177,13 @@ void emu_run(Emulator* self) {
 	SDL_AudioSpec spec = {
 		.freq = 48000,
 		.format = AUDIO_F32SYS,
-		.channels = 2
+		.channels = 2,
+		.samples = 2048
 	};
 
-	f32 audio_buffer[1024] = {};
+	f32 audio_buffer[2048] = {};
 	usize audio_size = 0;
-	SDL_AudioDeviceID audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, &spec, SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
+	SDL_AudioDeviceID audio_dev = SDL_OpenAudioDevice(NULL, false, &spec, &spec, 0);
 	if (!audio_dev) {
 		fprintf(stderr, "failed to open audio device: %s\n", SDL_GetError());
 		SDL_DestroyRenderer(renderer);
@@ -212,6 +206,9 @@ void emu_run(Emulator* self) {
 	Uint32 sprite_window_id = 0;
 
 	bool running = true;
+	f64 delta;
+	Uint64 last_time = SDL_GetPerformanceCounter();
+	Uint64 perf_freq = SDL_GetPerformanceFrequency();
 	while (running) {
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -234,9 +231,7 @@ void emu_run(Emulator* self) {
 					}
 				}
 				else if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-					//SDL_Rect rect = {.w = event.window.data1, .h = event.window.data2};
-					//SDL_RenderSetScale(renderer, (f32) event.window.data1 / 800.0f, (f32) event.window.data2 / 800.0f);
-					SDL_RenderSetLogicalSize(renderer, 800, 600);
+					SDL_RenderSetLogicalSize(renderer, REAL_WIDTH * 4, REAL_HEIGHT * 4);
 				}
 			}
 			else if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_t && event.key.keysym.mod & KMOD_CTRL) {
@@ -358,7 +353,7 @@ void emu_run(Emulator* self) {
 		SDL_UpdateTexture(tex, NULL, backing, REAL_WIDTH * 4);
 		self->bus.ppu.frame_ready = false;
 		SDL_RenderClear(renderer);
-		SDL_RenderCopy(renderer, tex, NULL, &render_rect);
+		SDL_RenderCopy(renderer, tex, NULL, NULL);
 		SDL_RenderPresent(renderer);
 
 		if (tile_window_id) {
@@ -375,6 +370,16 @@ void emu_run(Emulator* self) {
 			SDL_RenderClear(sprite_renderer);
 			SDL_RenderCopy(sprite_renderer, sprite_view_tex, NULL, NULL);
 			SDL_RenderPresent(sprite_renderer);
+		}
+
+		Uint64 cur_time = SDL_GetPerformanceCounter();
+		Uint64 delta_ticks = cur_time - last_time;
+		last_time = cur_time;
+		const f64 wanted_delta = 1.0 / 60.0f;
+		delta = (f64) delta_ticks / (f64) perf_freq;
+		//fprintf(stderr, "delta: %f, fps: %d\n", delta, (int) (1.0f / delta));
+		if (delta < wanted_delta) {
+			SDL_Delay((Uint32) ((wanted_delta - delta) * 1000));
 		}
 	}
 
