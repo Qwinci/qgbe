@@ -41,7 +41,8 @@ typedef struct Ppu {
 	u8 ob_palette0;
 	u8 ob_palette1;
 	bool frame_ready;
-	u8 pixel_x;
+	u8 bg_fetcher_x;
+	u8 lcd_x;
 	u8 sprite_count;
 	u8 sprite_ptr;
 
@@ -49,6 +50,13 @@ typedef struct Ppu {
 	u8 bg_fifo_size;
 	u8 bg_fifo_discard;
 	FetchState bg_fetch_state;
+
+	u32 sprite_fifo;
+	u8 sprite_fifo_size;
+	FetchState sprite_fetch_state;
+	OamEntry* sprite;
+	u8 sprite_tile_low;
+	u8 sprite_tile_high;
 
 	u16 bg_tile_data_area;
 	u8 bg_tile_num;
@@ -58,6 +66,8 @@ typedef struct Ppu {
 	u8 window_y;
 	bool wx_triggered;
 	bool wy_triggered;
+
+	bool fetching_sprite;
 } Ppu;
 
 void ppu_reset(Ppu* self);

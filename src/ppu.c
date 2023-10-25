@@ -38,10 +38,14 @@ static void ppu_change_mode(Ppu* self, PpuMode mode) {
 			self->cycle = 0;
 			self->wy_triggered = self->ly >= self->wy;
 			self->sprite_count = 0;
+			self->sprite = NULL;
+			self->sprite_ptr = 0;
 			break;
 		case PPU_MODE_DRAW:
 			self->bg_fifo_size = 0;
-			self->pixel_x = 0;
+			self->bg_fetcher_x = 0;
+			self->bg_fetch_state = FETCH_STATE_TILE_NUM;
+			self->lcd_x = 0;
 			if (!self->wy_triggered) {
 				self->bg_fifo_discard = self->scx % 8;
 			}
@@ -81,7 +85,6 @@ static void ppu_oam_scan(Ppu* self) {
 		ppu_change_mode(self, PPU_MODE_DRAW);
 		return;
 	}
-	// two cycles per entry
 	u8 height = self->lcdc & 1 << 2 ? 16 : 8;
 
 	u8* entry = &self->oam[self->cycle * 2];
@@ -90,7 +93,7 @@ static void ppu_oam_scan(Ppu* self) {
 	u8 tile_num = entry[2];
 	u8 flags = entry[3];
 
-	if (y - 16 >= self->ly && y - 16 + height > self->ly) {
+	if (self->ly + 16 >= y && self->ly + 16 < y + height) {
 		if (self->sprite_count < 10) {
 			u8 index = self->sprite_count;
 			for (u8 i = 0; i < self->sprite_count; ++i) {
@@ -117,7 +120,18 @@ static void ppu_draw(Ppu* self) {
 		return;
 	}
 
+	if (self->fetching_sprite) {
+		return;
+	}
+
 	if (self->bg_fetch_state == FETCH_STATE_TILE_NUM) {
+		if (self->wy_triggered && self->bg_fetcher_x >= self->wx - 7) {
+			self->wx_triggered = true;
+		}
+		else {
+			self->wx_triggered = false;
+		}
+
 		if (!(self->lcdc & 1 << 5)) {
 			self->wx_triggered = false;
 		}
@@ -136,7 +150,7 @@ static void ppu_draw(Ppu* self) {
 			y_off = 32 * ((self->window_y / 8) & 0xFF);
 		}
 		else {
-			x_off = ((self->scx + self->pixel_x) / 8) & 0x1F;
+			x_off = ((self->scx + self->bg_fetcher_x) / 8) & 0x1F;
 			y_off = 32 * (((self->ly + self->scy) / 8) & 0xFF);
 		}
 
@@ -187,6 +201,7 @@ static void ppu_draw(Ppu* self) {
 	}
 	else if (self->bg_fetch_state == FETCH_STATE_PUSH) {
 		if (self->bg_fifo_size == 0) {
+			self->bg_fifo = 0;
 			for (u8 i = 0; i < 8; ++i) {
 				self->bg_fifo <<= 3;
 				self->bg_fifo |= (self->bg_tile_low >> 7) << 2 | ((self->bg_tile_high >> 7) << 1);
@@ -195,6 +210,7 @@ static void ppu_draw(Ppu* self) {
 			}
 			self->bg_fifo_size = 8;
 			self->bg_fetch_state = FETCH_STATE_TILE_NUM;
+			self->bg_fetcher_x += 8;
 		}
 	}
 }
@@ -243,13 +259,17 @@ static void ppu_v_blank(Ppu* self) {
 }
 
 static void ppu_lcd_push(Ppu* self) {
-	if (self->bg_fifo_size) {
+	if (!self->fetching_sprite && self->bg_fifo_size) {
 		if (self->bg_fifo_discard) {
 			self->bg_fifo <<= 3;
 			self->bg_fifo_size -= 1;
 			self->bg_fifo_discard -= 1;
 			return;
 		}
+
+		assert(self->ly < LCD_HEIGHT);
+		assert(self->lcd_x < LCD_WIDTH);
+
 		u8 color_id;
 		if (self->lcdc & 1 << 0) {
 			color_id = (self->bg_fifo >> 23 & 1) | (self->bg_fifo >> 22 & 1) << 1;
@@ -257,16 +277,13 @@ static void ppu_lcd_push(Ppu* self) {
 		else {
 			color_id = 0;
 		}
-		self->bg_fifo <<= 3;
-		u8 color_index = self->bg_palette >> (2 * color_id) & 0b11;
-		self->texture[self->ly * LCD_WIDTH + self->pixel_x++] = PALETTE_COLORS[color_index];
-		if (self->wy_triggered && self->pixel_x + 7 >= self->wx) {
-			self->wx_triggered = true;
-		}
-		else {
-			self->wx_triggered = false;
-		}
 
+		u8 color_index = self->bg_palette >> (2 * color_id) & 0b11;
+		self->texture[self->ly * LCD_WIDTH + self->lcd_x] = PALETTE_COLORS[color_index];
+
+		self->lcd_x += 1;
+
+		self->bg_fifo <<= 3;
 		self->bg_fifo_size -= 1;
 	}
 }
@@ -281,10 +298,9 @@ void ppu_clock(Ppu* self) {
 			ppu_oam_scan(self);
 			break;
 		case PPU_MODE_DRAW:
-			assert(self->pixel_x < LCD_WIDTH);
 			ppu_draw(self);
 			ppu_lcd_push(self);
-			if (self->pixel_x == LCD_WIDTH) {
+			if (self->lcd_x == LCD_WIDTH) {
 				ppu_change_mode(self, PPU_MODE_H_BLANK);
 			}
 			break;
